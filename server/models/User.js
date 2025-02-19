@@ -1,4 +1,5 @@
 const mongoose=require('mongoose');
+
 const UserSchema=new mongoose.Schema({
     username:{
         type:String,
@@ -12,4 +13,5 @@ const UserSchema=new mongoose.Schema({
 
 },{timestamps:true,"strict":"throw"})
 
-export const UserModel = mongoose.model('User',UserSchema);
+const UserModel = mongoose.model('User',UserSchema);
+module.exports = UserModel;
