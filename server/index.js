@@ -6,6 +6,7 @@ const app=exp()
 const cors=require('cors')
 const cookieParser = require("cookie-parser");
 const bcrypt = require('bcryptjs')
+const ws=require('ws')
 
 //we can put port number, database address in env file
 //at end of project  put this jwt secret key in .env
@@ -81,6 +82,46 @@ app.post('/register',async (req,res)=>{
 
 
 mongoose.connect("mongodb://localhost:27017/chathive")
-.then(app.listen(1234,()=>console.log(`server listening on port 1234...`)))
-.catch(err=>console.log("error in DB connection",err))
+    .then(() => {
+        const server = app.listen(1234, () => console.log(`Server listening on port 1234...`));
+        const wss = new ws.WebSocketServer({ server });
 
+        wss.on("connection", (connection, req) => {
+            const cookies = req.headers.cookie;
+            if (cookies) {
+                const tokenCookieString = cookies.split(";").find(str => str.trim().startsWith("token="));
+                if (tokenCookieString) {
+                    const token = tokenCookieString.split("=")[1];
+                    if (token) {
+                        jwt.verify(token, jwtSecret, {}, (err, userData) => {
+                            if (err) {
+                                console.error("JWT verification failed:", err);
+                                return;
+                            }
+                            const { userId, username } = userData;
+                            connection.userId = userId;
+                            connection.username = username;
+                            broadcastOnlineUsers();
+                        });
+                    }
+                }
+            }
+
+            connection.on("close", () => {
+                setTimeout(broadcastOnlineUsers, 100);
+            });
+        });
+
+        function broadcastOnlineUsers() {
+            const onlineUsers = [...wss.clients]
+                .filter(client => client.userId && client.username)
+                .map(client => ({ userId: client.userId, username: client.username }));
+
+            if (onlineUsers.length > 0) {
+                [...wss.clients].forEach(client => {
+                    client.send(JSON.stringify({ online: onlineUsers }));
+                });
+            }
+        }
+    })
+    .catch(err => console.log("Error in DB connection", err));
